@@ -356,29 +356,20 @@ class AzureProvider(BaseProvider):
 
             :type return: str or None
         '''
-        self.log.debug('_check_zone: name=%s', name)
-        try:
-            if name in self._azure_zones:
-                return name
-            self._dns_client.zones.get(self._resource_group, name)
+        self.log.debug('_check_zone: name=%s create=%s', name, create)
+        # Check if the zone already exists in our set
+        if name in self._azure_zones:
+            return name
+        # If not, and its time to create, lets do it.
+        if create:
+            self.log.debug('_check_zone:no matching zone; creating %s', name)
+            create_zone = self._dns_client.zones.create_or_update
+            create_zone(self._resource_group, name, Zone(location='global'))
             self._azure_zones.add(name)
             return name
-        except CloudError as err:
-            msg = 'The Resource \'Microsoft.Network/dnszones/{}\''.format(name)
-            msg += ' under resource group \'{}\''.format(self._resource_group)
-            msg += ' was not found.'
-            if msg == err.message:
-                # Then the only error is that the zone doesn't currently exist
-                if create:
-                    self.log.debug('_check_zone:no matching zone; creating %s',
-                                   name)
-                    create_zone = self._dns_client.zones.create_or_update
-                    create_zone(self._resource_group, name,
-                                Zone(location='global'))
-                    return name
-                else:
-                    return
-            raise
+        else:
+            # Else return nothing (aka false)
+            return
 
     def populate(self, zone, target=False, lenient=False):
         '''Required function of manager.py to collect records from zone.
